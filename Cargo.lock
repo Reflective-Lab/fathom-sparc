@@ -572,7 +572,7 @@ dependencies = [
 [[package]]
 name = "converge-manifold-adapters"
 version = "1.0.0"
-source = "git+https://github.com/Reflective-Lab/manifold-adapters?branch=next#7ef35c45d7fc094c501828b71311548ebbe5ea6e"
+source = "git+https://github.com/Reflective-Lab/manifold-adapters?branch=main#63e530f2b35a486ce9c3d07f96be0cb32e834124"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
