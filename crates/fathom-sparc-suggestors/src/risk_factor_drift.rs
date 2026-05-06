@@ -50,7 +50,7 @@ impl RiskFactorDriftSuggestor {
     fn parse_signals(&self, ctx: &dyn Context) -> Vec<RiskFactorSection> {
         ctx.get(ContextKey::Signals)
             .iter()
-            .filter_map(|f| serde_json::from_str::<RiskFactorSection>(&f.content).ok())
+            .filter_map(|f| serde_json::from_str::<RiskFactorSection>(f.content()).ok())
             .collect()
     }
 }

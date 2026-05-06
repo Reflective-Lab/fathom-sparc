@@ -21,24 +21,33 @@ fathom-sparc-core       = { path = "crates/fathom-sparc-core" }
 fathom-sparc-ingest     = { path = "crates/fathom-sparc-ingest" }
 fathom-sparc-suggestors = { path = "crates/fathom-sparc-suggestors" }
 
-# Converge platform — published on crates.io.
-# `converge-runtime` is intentionally not depended on: the name on crates.io
-# belongs to an unrelated project, and `converge-kernel` re-exports `Engine`.
-converge-kernel   = "3.7.6"
-converge-model    = "3.7.6"
-converge-pack     = "3.7.6"
-converge-storage  = "3.7.6"
+# Converge platform — published on crates.io. Bumped to 3.8.1 (the v3.8 line)
+# alongside the Reflective-Lab platform extraction (see migration notes:
+# converge-knowledge → mnemos, -analytics → prism, -policy → arbiter,
+# -domain → atelier, -provider-adapters → manifold).
+converge-kernel   = "3.8.1"
+converge-model    = "3.8.1"
+converge-pack     = "3.8.1"
+converge-storage  = "3.8.1"
 # converge-core is re-exported partially through converge-kernel; the Violation
 # type used by custom invariants is not in the re-export list, so we depend
 # on core directly when authoring invariants.
-converge-core     = "3.7.6"
+converge-core     = "3.8.1"
 
-# Converge extension — git dep (the `prism` name on crates.io belongs to an
-# unrelated chart library; pin via git until/unless it's republished as
-# `converge-prism`).
-prism = { git = "https://github.com/Reflective-Lab/prism", branch = "main" }
+# Converge extensions — git deps because the matching crates.io names are
+# already taken by unrelated projects. The Reflective-Lab packages were
+# renamed `converge-{name}-{purpose}` on github main precisely to dodge the
+# crates.io collision; the *lib* names (used in `use` statements) stay short.
+prism = { package = "converge-prism-analytics",  git = "https://github.com/Reflective-Lab/prism",         branch = "main" }
+arbiter = { package = "converge-arbiter-policy", git = "https://github.com/Reflective-Lab/arbiter-policy", branch = "main" }
 
-# Organism — formation assembly, published on crates.io
+# Constraint solvers (CP-SAT, MIP) as Converge suggestors. Earns its keep
+# at portfolio scope (1.7.0+); declared in the catalogue so it's visible.
+ferrox = "0.1"
+
+# Organism — formation assembly. Held at 1.4.0 (compatible with converge 3.7.x);
+# this catalogue entry is unused by any crate today and will get bumped when
+# Organism publishes a 3.8.1-compatible release for the formation slice.
 organism-intent    = "1.4.0"
 organism-planning  = "1.4.0"
 organism-runtime   = "1.4.0"

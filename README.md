@@ -311,7 +311,7 @@ The output now reflects that:
 couldn't supply that string. The suggestor that proposed the fact is encoded
 in the id prefix (`risk_factor_drift::…` vs `risk_factor_language::…`).
 
-**1.4.0 — HITL gate + structural invariant (shipped).** The engine now
+**1.4.0 — HITL gate + structural invariant (shipped).** The engine
 exercises its governance machinery, not just its scheduling.
 
 - **Confidence-driven HITL.** `RiskFactorLanguageSuggestor` now sets
@@ -338,16 +338,83 @@ That `INFO` line is the proof. The engine paused, surfaced the proposal,
 waited for a decision, and only then promoted. The integrity proof on the
 final `ConvergeResult` includes the gate event in its audit trail.
 
+**1.5.0 — Cedar policy preflight + Converge 3.8.1 platform bump (shipped).**
+Two things landed together because they unblocked each other:
+
+1. **Platform bump to Converge 3.8.1.** The v3.8 line extracted several
+   foundation crates into separate Reflective-Lab extensions
+   (`converge-knowledge → mnemos`, `-analytics → prism`, `-policy → arbiter`,
+   `-domain → atelier`, `-provider-adapters → manifold`). For
+   fathom-sparc the migration was lightweight: bump `converge-* = "3.8.1"`,
+   rename `Fact → ContextFact`, switch `f.id`/`f.content` from fields to
+   methods, drop the (now-removed) `kernel-authority` feature, and refactor
+   the invariant tests to exercise a pure-data helper instead of mocking
+   `ContextFact`s the engine no longer lets you construct.
+
+2. **Cedar policy front gate via `arbiter`.** The CLI now runs a
+   `PolicyEngine::evaluate` preflight before the Converge engine starts.
+   Policy text lives at `policies/fathom_sparc.cedar` and is embedded into
+   the binary at build time:
+
+   ```cedar
+   permit(principal, action == Action::"propose", resource)
+   when {
+     resource.resource_type == "research" &&
+     principal.domains.contains("financial-analysis") &&
+     (principal.authority == "participatory" ||
+      principal.authority == "supervisory" ||
+      principal.authority == "sovereign")
+   };
+
+   forbid(principal, action == Action::"propose", resource)
+   when {
+     resource.resource_type == "research" &&
+     principal.authority == "advisory"
+   };
+   ```
+
+   The principal is hard-coded to `agent:fathom-sparc:analyst` (Participatory,
+   `["financial-analysis"]`) for the dev CLI; in a SaaS context it comes
+   from an auth token and the policy file is the single editable artefact
+   that controls who can do what.
+
+### The gate taxonomy
+
+Three well-defined gates, each with one responsibility, each with its own
+library:
+
+| Stage | Gate | Library | Question | What fires today on Apple FY24→FY25 |
+|---|---|---|---|---|
+| **Preflight (front)** | Cedar policy | `arbiter::PolicyEngine` | "Should this analysis even be attempted?" | Permitted (analyst principal in financial-analysis domain) |
+| **Promotion (back)** | Confidence-based HITL | `converge_kernel::EngineHitlPolicy` | "Should this analytical conclusion be admitted as truth?" | Pauses on `risk_factor_language` (Jaccard 0.618 < 0.7); auto-approved |
+| **Acceptance** | Custom invariant | `converge_kernel::Invariant` | "Are the promoted facts internally consistent?" | `RiskFactorMassConservationInvariant` accepts (added=6, removed=7, delta=-1 ✓) |
+
+```text
+$ RUST_LOG=info fathom-sparc analyse 0000320193
+INFO  fathom_sparc: policy preflight: permitted
+      principal=agent:fathom-sparc:analyst
+      resource=flow:fathom-sparc:analyse:0000320193
+INFO  converge_core::engine: Proposal requires HITL approval — pausing convergence
+WARN  fathom_sparc: auto-approving HITL gate (confidence ≤ 0.7) …
+INFO  converge_core::engine: HITL gate approved, promoting proposal
+INFO  fathom_sparc: engine finished cycles=2 converged=true gated=1
+```
+
+Tests: 22 passing (5 drift unit + 6 language unit + 7 invariant unit + 2
+ingest + 2 binary integration).
+
 **Next slices.**
 
-1. **HuggingFace pipeline (1.5.0).** Use `hf-hub` to download a sample
-   from `JanosAudran/financial-reports-sec`, parse to `RiskFactorSection`
-   fixtures (same shape). Adds a `fathom-sparc ingest --source=huggingface`
-   subcommand. The downstream — engine, suggestors, invariant — is unchanged.
-2. **SEC EDGAR ingest (1.6.0).** Port the python heading extractor to
-   Rust (reqwest + scraper). Adds `fathom-sparc ingest --source=sec --cik=…`.
-   Once this lands, fixtures become test fixtures rather than the source
-   of truth.
-3. **Organism formation (2.0.0).** Assemble both suggestors into
-   `DisclosureRiskFormation`. Run across a portfolio of CIKs for a
-   screen-style output. This is the moment Organism earns its keep.
+1. **HF + SEC EDGAR ingest (1.6.0).** `hf-hub` to download a slice of
+   `JanosAudran/financial-reports-sec`; Rust port of the python heading
+   extractor for live SEC EDGAR filings. Both produce
+   `RiskFactorSection`s; downstream (engine, suggestors, invariant,
+   gates) is unchanged.
+2. **PortfolioCoverageFormation with Ferrox (1.7.0).** Multi-CIK fixtures
+   plus a Ferrox CP-SAT or HiGHS solver picking which N CIKs to deep-review
+   under an analyst-hour budget. This is the slice where the *constraint
+   solver* extension earns its keep — single-CIK demos can't make use of
+   it.
+3. **Organism formation (2.0.0).** Assemble drift + language + future
+   suggestors into `DisclosureRiskFormation`. Run across a portfolio for
+   a screen-style output. Where Organism earns its keep.

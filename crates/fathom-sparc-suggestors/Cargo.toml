@@ -23,10 +23,10 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 
-[dev-dependencies]
-# Tests for invariants need to construct Fact instances via the
-# kernel-authority API.
-converge-pack = { workspace = true, features = ["kernel-authority"] }
+# NOTE: in converge-pack 3.8.1 the `kernel-authority` feature is gone — the
+# engine is the only authorised constructor of Facts. Invariant unit tests
+# now exercise the pure-data helper `check_mass_conservation()`, which
+# avoids needing to fabricate facts at all.
 
 # NOTE: lakehouse (datafusion/arrow/iceberg/iceberg-datafusion), ML (burn,
 # ndarray, polars), and Prism are declared in `workspace.dependencies` and

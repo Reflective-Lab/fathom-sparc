@@ -16,11 +16,17 @@ use std::fs;
 use std::path::PathBuf;
 
 use anyhow::{Context as _, bail};
+use arbiter::{
+    PolicyEngine,
+    decision::PolicyOutcome,
+    types::{ContextIn, DecideRequest, PrincipalIn, ResourceIn},
+};
 use clap::{Parser, Subcommand};
+use converge_core::{AuthorityLevel, FlowAction, FlowPhase};
 use converge_kernel::{
     ContextState, Engine, EngineHitlPolicy, GateDecision, RunResult, TimeoutPolicy,
 };
-use converge_pack::{ContextKey, Fact};
+use converge_pack::{ContextFact, ContextKey};
 use fathom_sparc_core::{Cik, RiskFactorSection};
 use fathom_sparc_ingest::load_risk_factor_fixture;
 use fathom_sparc_suggestors::{
@@ -32,6 +38,11 @@ use fathom_sparc_suggestors::{
 /// any consecutive-year pair with substantial language churn (Jaccard ≤ 0.7)
 /// requires explicit approval before promotion.
 const HITL_CONFIDENCE_THRESHOLD: f64 = 0.7;
+
+/// Cedar policy text — checked into `policies/fathom_sparc.cedar`,
+/// embedded at build time so a single-file `fathom-sparc` binary doesn't
+/// need its policy on disk at runtime.
+const POLICY_TEXT: &str = include_str!("../../../policies/fathom_sparc.cedar");
 
 const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures");
 
@@ -77,6 +88,10 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn analyse(cik: Cik, fixtures_dir: &std::path::Path) -> anyhow::Result<()> {
+    // Front gate: Cedar policy preflight. In production the principal comes
+    // from an auth token; for the dev CLI we hard-code an analyst persona.
+    preflight_policy_check(&cik)?;
+
     let sections = load_sections_for_cik(&cik, fixtures_dir)?;
     if sections.len() < 2 {
         bail!(
@@ -180,6 +195,67 @@ fn load_sections_for_cik(
     Ok(out)
 }
 
+/// Cedar-policy preflight via `arbiter`. Constructs a `DecideRequest`
+/// describing *who* is asking *what* of *which* resource, evaluates the
+/// embedded policy, and aborts with a descriptive error on deny/escalate.
+///
+/// This is the **front gate** in the Fathom — SPARC gate taxonomy. It runs
+/// before the Converge engine starts; it does not consume engine cycles or
+/// produce facts. Pair it with the **back gate** (`EngineHitlPolicy` for
+/// low-confidence proposals) and the **acceptance gate**
+/// (`RiskFactorMassConservationInvariant`).
+fn preflight_policy_check(cik: &Cik) -> anyhow::Result<()> {
+    let engine = PolicyEngine::from_policy_str(POLICY_TEXT)
+        .map_err(|e| anyhow::anyhow!("loading policy: {e:?}"))?;
+    let request = analyst_decide_request(cik);
+    let decision = engine
+        .evaluate(&request)
+        .map_err(|e| anyhow::anyhow!("policy eval: {e:?}"))?;
+    match decision.outcome {
+        PolicyOutcome::Promote => {
+            tracing::info!(
+                principal = %decision.principal_id,
+                resource = %decision.resource_id,
+                "policy preflight: permitted"
+            );
+            Ok(())
+        }
+        PolicyOutcome::Reject => bail!(
+            "policy denied analysis of CIK {}: {}",
+            cik.as_str(),
+            decision.reason.unwrap_or_else(|| "no reason given".into())
+        ),
+        PolicyOutcome::Escalate => bail!(
+            "policy escalation required for CIK {}: {}",
+            cik.as_str(),
+            decision.reason.unwrap_or_else(|| "no reason given".into())
+        ),
+    }
+}
+
+/// Constructs the `DecideRequest` the dev CLI submits to `arbiter`. In
+/// production the principal would come from an auth token; for the dev
+/// binary the analyst persona is hard-coded.
+fn analyst_decide_request(cik: &Cik) -> DecideRequest {
+    DecideRequest {
+        principal: PrincipalIn {
+            id: "agent:fathom-sparc:analyst".into(),
+            authority: AuthorityLevel::Participatory,
+            domains: vec!["financial-analysis".into()],
+            policy_version: None,
+        },
+        resource: ResourceIn {
+            id: format!("flow:fathom-sparc:analyse:{}", cik.as_str()).into(),
+            resource_type: Some("research".into()),
+            phase: Some(FlowPhase::Framing),
+            gates_passed: None,
+        },
+        action: FlowAction::Propose,
+        context: Some(ContextIn::default()),
+        delegation_b64: None,
+    }
+}
+
 /// Stages each loaded section as an *input* into a fresh `ContextState`.
 /// The engine drains these proposals at cycle 0 and promotes them to
 /// authoritative `Fact`s under `ContextKey::Signals` — which is exactly
@@ -204,9 +280,9 @@ fn seed_context(sections: &[RiskFactorSection]) -> anyhow::Result<ContextState> 
     Ok(ctx)
 }
 
-/// Display-friendly projection of a promoted `Fact` — strips the internal id
-/// type wrapper so the JSON output reads cleanly. Provenance is recovered
-/// from the fact's promotion record (the actor that promoted it).
+/// Display-friendly projection of a promoted `ContextFact` — strips the
+/// internal id type wrapper so the JSON output reads cleanly. Provenance is
+/// recovered from the fact's promotion record (the actor that promoted it).
 #[derive(serde::Serialize)]
 struct FactView<'a> {
     key: &'a str,
@@ -215,8 +291,8 @@ struct FactView<'a> {
     promoted_by: String,
 }
 
-impl<'a> From<&'a Fact> for FactView<'a> {
-    fn from(f: &'a Fact) -> Self {
+impl<'a> From<&'a ContextFact> for FactView<'a> {
+    fn from(f: &'a ContextFact) -> Self {
         let key = match f.key() {
             ContextKey::Proposals => "Proposals",
             ContextKey::Signals => "Signals",
@@ -231,11 +307,12 @@ impl<'a> From<&'a Fact> for FactView<'a> {
             ContextKey::Disagreements => "Disagreements",
             ContextKey::ConsensusOutcomes => "ConsensusOutcomes",
         };
-        let content = serde_json::from_str(&f.content)
-            .unwrap_or(serde_json::Value::String(f.content.clone()));
+        let raw = f.content();
+        let content = serde_json::from_str(raw)
+            .unwrap_or_else(|_| serde_json::Value::String(raw.to_string()));
         Self {
             key,
-            id: f.id.to_string(),
+            id: f.id().to_string(),
             content,
             promoted_by: format!("{:?}", f.promotion_record().approver()),
         }

@@ -10,8 +10,8 @@
 use std::collections::HashMap;
 
 use converge_core::invariant::Violation;
-use converge_pack::{Context, ContextKey};
 use converge_kernel::{Invariant, InvariantClass, InvariantResult};
+use converge_pack::{Context, ContextKey};
 use fathom_sparc_core::analytic::{RiskFactorDrift, RiskFactorLanguageDrift};
 
 /// Mass conservation: for any `(CIK, fiscal_year)` where both a count drift
@@ -40,61 +40,73 @@ impl Invariant for RiskFactorMassConservationInvariant {
     }
 
     fn check(&self, ctx: &dyn Context) -> InvariantResult {
-        let mut counts: HashMap<(String, u16), RiskFactorDrift> = HashMap::new();
-        let mut langs: HashMap<(String, u16), RiskFactorLanguageDrift> = HashMap::new();
-
+        let mut counts = Vec::new();
+        let mut langs = Vec::new();
         for fact in ctx.get(ContextKey::Proposals) {
-            if let Ok(d) = serde_json::from_str::<RiskFactorDrift>(&fact.content) {
-                counts.insert((d.current.cik.as_str().to_string(), d.current.fiscal_year), d);
+            if let Ok(d) = serde_json::from_str::<RiskFactorDrift>(fact.content()) {
+                counts.push(d);
                 continue;
             }
-            if let Ok(d) = serde_json::from_str::<RiskFactorLanguageDrift>(&fact.content) {
-                langs.insert((d.current.cik.as_str().to_string(), d.current.fiscal_year), d);
+            if let Ok(d) = serde_json::from_str::<RiskFactorLanguageDrift>(fact.content()) {
+                langs.push(d);
             }
         }
-
-        for (key, count) in &counts {
-            let Some(lang) = langs.get(key) else { continue };
-            let lang_delta = lang.added.len() as i32 - lang.removed.len() as i32;
-            if lang_delta != count.delta {
-                return InvariantResult::Violated(Violation::new(format!(
-                    "mass conservation violated for CIK {} FY{}: \
-                     count delta = {}, language (added - removed) = ({} - {}) = {}",
-                    count.current.cik.as_str(),
-                    count.current.fiscal_year,
-                    count.delta,
-                    lang.added.len(),
-                    lang.removed.len(),
-                    lang_delta,
-                )));
-            }
+        match check_mass_conservation(&counts, &langs) {
+            None => InvariantResult::Ok,
+            Some(reason) => InvariantResult::Violated(Violation::new(reason)),
         }
-
-        InvariantResult::Ok
     }
+}
+
+/// Pure-data implementation of the invariant — testable without constructing
+/// `ContextFact` instances (which 3.8.1 reserves for the engine).
+///
+/// Returns `None` when the identity holds for every `(CIK, fiscal_year)` pair
+/// where both kinds of drift are present, otherwise returns a human-readable
+/// description of the first violation found.
+pub fn check_mass_conservation(
+    counts: &[RiskFactorDrift],
+    langs: &[RiskFactorLanguageDrift],
+) -> Option<String> {
+    let by_key: HashMap<(String, u16), &RiskFactorLanguageDrift> = langs
+        .iter()
+        .map(|d| {
+            (
+                (d.current.cik.as_str().to_string(), d.current.fiscal_year),
+                d,
+            )
+        })
+        .collect();
+
+    for count in counts {
+        let key = (
+            count.current.cik.as_str().to_string(),
+            count.current.fiscal_year,
+        );
+        let Some(lang) = by_key.get(&key) else {
+            continue;
+        };
+        let lang_delta = lang.added.len() as i32 - lang.removed.len() as i32;
+        if lang_delta != count.delta {
+            return Some(format!(
+                "mass conservation violated for CIK {} FY{}: \
+                 count delta = {}, language (added - removed) = ({} - {}) = {}",
+                count.current.cik.as_str(),
+                count.current.fiscal_year,
+                count.delta,
+                lang.added.len(),
+                lang.removed.len(),
+                lang_delta,
+            ));
+        }
+    }
+    None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use converge_pack::Fact;
-    use converge_pack::fact::kernel_authority::new_fact;
     use fathom_sparc_core::{Cik, FilingId, FormType};
-
-    struct MockCtx {
-        proposals: Vec<Fact>,
-    }
-    impl Context for MockCtx {
-        fn has(&self, k: ContextKey) -> bool {
-            matches!(k, ContextKey::Proposals) && !self.proposals.is_empty()
-        }
-        fn get(&self, k: ContextKey) -> &[Fact] {
-            match k {
-                ContextKey::Proposals => &self.proposals,
-                _ => &[],
-            }
-        }
-    }
 
     fn filing(cik: &str, fy: u16) -> FilingId {
         FilingId {
@@ -104,84 +116,83 @@ mod tests {
         }
     }
 
-    fn count_fact(cik: &str, fy: u16, prior_count: usize, current_count: usize) -> Fact {
-        let drift = RiskFactorDrift {
+    fn count_drift(cik: &str, fy: u16, prior: usize, current: usize) -> RiskFactorDrift {
+        RiskFactorDrift {
             current: filing(cik, fy),
             prior: filing(cik, fy - 1),
-            current_count,
-            prior_count,
-            delta: current_count as i32 - prior_count as i32,
-        };
-        new_fact(
-            ContextKey::Proposals,
-            format!("risk_factor_drift::{cik}::{fy}"),
-            serde_json::to_string(&drift).unwrap(),
-        )
+            current_count: current,
+            prior_count: prior,
+            delta: current as i32 - prior as i32,
+        }
     }
 
-    fn lang_fact(cik: &str, fy: u16, added: usize, removed: usize) -> Fact {
-        let drift = RiskFactorLanguageDrift {
+    fn lang_drift(cik: &str, fy: u16, added: usize, removed: usize) -> RiskFactorLanguageDrift {
+        RiskFactorLanguageDrift {
             current: filing(cik, fy),
             prior: filing(cik, fy - 1),
             identical_count: 20,
             jaccard_similarity: 0.8,
             added: (0..added).map(|i| format!("a-{i}")).collect(),
             removed: (0..removed).map(|i| format!("r-{i}")).collect(),
-        };
-        new_fact(
-            ContextKey::Proposals,
-            format!("risk_factor_language::{cik}::{fy}"),
-            serde_json::to_string(&drift).unwrap(),
-        )
+        }
     }
 
     #[test]
     fn passes_when_identity_holds() {
         // delta = -1 → added = 6, removed = 7, diff = -1 ✓
-        let ctx = MockCtx {
-            proposals: vec![
-                count_fact("0000320193", 2025, 28, 27),
-                lang_fact("0000320193", 2025, 6, 7),
-            ],
-        };
-        assert!(RiskFactorMassConservationInvariant.check(&ctx).is_ok());
+        let counts = vec![count_drift("0000320193", 2025, 28, 27)];
+        let langs = vec![lang_drift("0000320193", 2025, 6, 7)];
+        assert!(check_mass_conservation(&counts, &langs).is_none());
     }
 
     #[test]
     fn passes_when_only_count_present() {
-        let ctx = MockCtx {
-            proposals: vec![count_fact("0000320193", 2025, 28, 27)],
-        };
-        assert!(RiskFactorMassConservationInvariant.check(&ctx).is_ok());
+        let counts = vec![count_drift("0000320193", 2025, 28, 27)];
+        assert!(check_mass_conservation(&counts, &[]).is_none());
+    }
+
+    #[test]
+    fn passes_when_only_language_present() {
+        let langs = vec![lang_drift("0000320193", 2025, 3, 3)];
+        assert!(check_mass_conservation(&[], &langs).is_none());
     }
 
     #[test]
     fn violates_when_identity_breaks() {
         // delta = -1 but language reports added=6, removed=8 → diff = -2 ≠ -1
-        let ctx = MockCtx {
-            proposals: vec![
-                count_fact("0000320193", 2025, 28, 27),
-                lang_fact("0000320193", 2025, 6, 8),
-            ],
-        };
-        let result = RiskFactorMassConservationInvariant.check(&ctx);
-        assert!(result.is_violated());
-        if let InvariantResult::Violated(v) = result {
-            assert!(v.reason.contains("mass conservation"));
-            assert!(v.reason.contains("0000320193"));
-        }
+        let counts = vec![count_drift("0000320193", 2025, 28, 27)];
+        let langs = vec![lang_drift("0000320193", 2025, 6, 8)];
+        let reason = check_mass_conservation(&counts, &langs).expect("violation");
+        assert!(reason.contains("mass conservation"));
+        assert!(reason.contains("0000320193"));
     }
 
     #[test]
     fn violates_when_count_grows_but_language_does_not() {
-        let ctx = MockCtx {
-            proposals: vec![
-                count_fact("0000789019", 2025, 30, 35), // delta = +5
-                lang_fact("0000789019", 2025, 2, 0),    // diff = +2
-            ],
-        };
-        assert!(RiskFactorMassConservationInvariant
-            .check(&ctx)
-            .is_violated());
+        let counts = vec![count_drift("0000789019", 2025, 30, 35)]; // delta = +5
+        let langs = vec![lang_drift("0000789019", 2025, 2, 0)]; // diff = +2
+        assert!(check_mass_conservation(&counts, &langs).is_some());
+    }
+
+    #[test]
+    fn checks_per_cik_independently() {
+        // Apple is consistent (-1, -1); Microsoft is inconsistent (+5 vs +2).
+        let counts = vec![
+            count_drift("0000320193", 2025, 28, 27),
+            count_drift("0000789019", 2025, 30, 35),
+        ];
+        let langs = vec![
+            lang_drift("0000320193", 2025, 6, 7),
+            lang_drift("0000789019", 2025, 2, 0),
+        ];
+        let reason = check_mass_conservation(&counts, &langs).expect("violation");
+        assert!(reason.contains("0000789019"));
+    }
+
+    #[test]
+    fn invariant_metadata() {
+        let inv = RiskFactorMassConservationInvariant;
+        assert_eq!(inv.name(), "risk_factor_mass_conservation");
+        assert_eq!(inv.class(), InvariantClass::Acceptance);
     }
 }
