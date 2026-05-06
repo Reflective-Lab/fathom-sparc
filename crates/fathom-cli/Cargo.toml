@@ -16,9 +16,8 @@ fathom-core.workspace = true
 fathom-ingest.workspace = true
 fathom-suggestors.workspace = true
 
-# Converge runtime + storage
+# Converge — engine via kernel
 converge-kernel.workspace = true
-converge-runtime.workspace = true
 converge-storage.workspace = true
 
 # Organism — formation assembly

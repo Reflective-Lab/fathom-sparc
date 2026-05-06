@@ -10,14 +10,15 @@ description = "HuggingFace → DataFusion → Iceberg materialisation for Fathom
 [dependencies]
 fathom-core.workspace = true
 
-# Lakehouse stack
+# Lakehouse stack — `iceberg-datafusion 0.6` is intentionally not pulled in
+# at build time: it pins datafusion ^47 while we use 53. Track upstream and
+# re-enable once iceberg-rust catches up to a datafusion 53-compatible release.
 datafusion.workspace = true
 arrow.workspace = true
 parquet.workspace = true
 object_store.workspace = true
 iceberg.workspace = true
 iceberg-catalog-rest.workspace = true
-iceberg-datafusion.workspace = true
 
 # Source
 hf-hub.workspace = true

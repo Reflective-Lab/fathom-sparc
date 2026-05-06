@@ -21,11 +21,12 @@ fathom-core       = { path = "crates/fathom-core" }
 fathom-ingest     = { path = "crates/fathom-ingest" }
 fathom-suggestors = { path = "crates/fathom-suggestors" }
 
-# Converge platform — published on crates.io
+# Converge platform — published on crates.io.
+# `converge-runtime` is intentionally not depended on: the name on crates.io
+# belongs to an unrelated project, and `converge-kernel` re-exports `Engine`.
 converge-kernel   = "3.7.6"
 converge-model    = "3.7.6"
 converge-pack     = "3.7.6"
-converge-runtime  = "3.7.6"
 converge-storage  = "3.7.6"
 
 # Converge extension — git dep (the `prism` name on crates.io belongs to an
@@ -34,10 +35,10 @@ converge-storage  = "3.7.6"
 prism = { git = "https://github.com/Reflective-Lab/prism", branch = "main" }
 
 # Organism — formation assembly, published on crates.io
-organism-intent    = "1.5.0"
-organism-planning  = "1.5.0"
-organism-runtime   = "1.5.0"
-organism-pack      = "1.5.0"
+organism-intent    = "1.4.0"
+organism-planning  = "1.4.0"
+organism-runtime   = "1.4.0"
+organism-pack      = "1.4.0"
 
 # Lakehouse / compute — versions aligned with Sail's foundation.
 # Run Sail as a service (see compose.yml) when one-box DataFusion isn't enough.

@@ -11,27 +11,16 @@ description = "Converge suggestors that query Fathom's Iceberg lakehouse and pro
 fathom-core.workspace = true
 
 # Converge contracts
-converge-kernel.workspace = true
-converge-model.workspace = true
 converge-pack.workspace = true
 
-# Prism analytic packs
-prism.workspace = true
-
-# Lakehouse query
-datafusion.workspace = true
-arrow.workspace = true
-iceberg.workspace = true
-iceberg-datafusion.workspace = true
-
-# Burn for inference
-burn.workspace = true
-ndarray.workspace = true
-polars.workspace = true
-
 # Async + utilities
-tokio.workspace = true
 async-trait.workspace = true
-anyhow.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
+
+# NOTE: lakehouse (datafusion/arrow/iceberg/iceberg-datafusion), ML (burn,
+# ndarray, polars), and Prism are declared in `workspace.dependencies` and
+# pulled in per-suggestor when needed. Keeping them out of the default build
+# graph avoids native-library link conflicts (liblzma in burn vs. xz2 in
+# datafusion) and the iceberg-datafusion 0.6 / datafusion 53 mismatch.
