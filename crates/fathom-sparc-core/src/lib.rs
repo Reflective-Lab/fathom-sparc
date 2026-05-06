@@ -84,4 +84,32 @@ pub mod analytic {
             "risk_factor_count_delta_yoy"
         }
     }
+
+    /// Year-over-year drift in the *language* of disclosed risk factors.
+    ///
+    /// `jaccard_similarity` is the size of the intersection of the two
+    /// heading sets divided by the size of their union, in `[0.0, 1.0]`. A
+    /// value of `1.0` means every heading is byte-identical between years;
+    /// `0.0` means a complete rewrite. The `added` and `removed` lists are
+    /// the actionable detail — they tell a reader *what* changed, not just
+    /// *that* it changed.
+    ///
+    /// This signal is complementary to [`RiskFactorDrift`]: the count can be
+    /// flat while language churn is high (or vice versa), and the formation
+    /// is meant to flag the disagreement, not paper over it.
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub struct RiskFactorLanguageDrift {
+        pub current: FilingId,
+        pub prior: FilingId,
+        pub identical_count: usize,
+        pub jaccard_similarity: f64,
+        pub added: Vec<String>,
+        pub removed: Vec<String>,
+    }
+
+    impl RiskFactorLanguageDrift {
+        pub fn metric_name() -> &'static str {
+            "risk_factor_language_drift_yoy"
+        }
+    }
 }

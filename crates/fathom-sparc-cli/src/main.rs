@@ -16,7 +16,7 @@ use converge_pack::fact::kernel_authority::new_fact;
 use converge_pack::{Context, ContextKey, Suggestor};
 use fathom_sparc_core::{Cik, RiskFactorSection};
 use fathom_sparc_ingest::load_risk_factor_fixture;
-use fathom_sparc_suggestors::RiskFactorDriftSuggestor;
+use fathom_sparc_suggestors::{RiskFactorDriftSuggestor, RiskFactorLanguageSuggestor};
 
 const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures");
 
@@ -79,23 +79,31 @@ async fn analyse(cik: Cik, fixtures_dir: &std::path::Path) -> anyhow::Result<()>
     );
 
     let ctx = build_context(&sections)?;
-    let suggestor = RiskFactorDriftSuggestor::new();
+    let mut all_proposals: Vec<converge_pack::ProposedFact> = Vec::new();
 
-    if !suggestor.accepts(&ctx) {
-        println!("suggestor declined to run (already proposed or insufficient signals)");
-        return Ok(());
+    // Run each suggestor in registration order. Engine integration (eligibility
+    // scheduling, dependency-driven re-runs, promotion gate) lands when there
+    // are signals for suggestors to compose on; for now, sequential direct
+    // calls demonstrate the analytical surface end-to-end.
+    let drift = RiskFactorDriftSuggestor::new();
+    if drift.accepts(&ctx) {
+        all_proposals.extend(drift.execute(&ctx).await.proposals);
+    }
+    let language = RiskFactorLanguageSuggestor::new();
+    if language.accepts(&ctx) {
+        all_proposals.extend(language.execute(&ctx).await.proposals);
     }
 
-    let effect = suggestor.execute(&ctx).await;
-    let proposals = &effect.proposals;
-    if proposals.is_empty() {
-        println!("no consecutive-year pairs found; no drift proposed");
+    if all_proposals.is_empty() {
+        println!("no consecutive-year pairs found; no proposals emitted");
         return Ok(());
     }
 
     println!(
         "{}",
-        serde_json::to_string_pretty(&proposals.iter().map(ProposalView::from).collect::<Vec<_>>())?
+        serde_json::to_string_pretty(
+            &all_proposals.iter().map(ProposalView::from).collect::<Vec<_>>()
+        )?
     );
     Ok(())
 }
