@@ -21,6 +21,9 @@ ferrox-mip = ["dep:ferrox"]
 # manifold's HttpFetchProvider + ScraperHtmlBackend through
 # fathom-sparc-ingest.
 sec-ingest = ["fathom-sparc-ingest/sec"]
+# Live HuggingFace JSONL ingest (`fathom-sparc ingest --source=hf`). Pulls
+# manifold's HuggingFaceObjectStore through fathom-sparc-ingest.
+hf-ingest = ["fathom-sparc-ingest/hf"]
 
 [dependencies]
 fathom-sparc-core.workspace = true

@@ -60,26 +60,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Live SEC EDGAR ingest — fetch a 10-K HTML, extract Item 1A risk
-    /// factors, write a `RiskFactorSection` JSON fixture under `fixtures/`.
-    /// Requires the `sec-ingest` feature.
+    /// Live ingest — fetch a 10-K from SEC EDGAR or pull a JSONL shard
+    /// from a HuggingFace dataset, write `RiskFactorSection` JSON
+    /// fixture(s) under `fixtures/`.
     Ingest {
-        /// Source: `sec` (live SEC EDGAR fetch). Future: `hf`.
-        #[arg(long, default_value = "sec")]
-        source: String,
-        /// SEC CIK (e.g. 0000320193).
-        #[arg(long)]
-        cik: String,
-        /// Direct URL to the primary 10-K HTML document on EDGAR (e.g.
-        /// `https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm`).
-        #[arg(long)]
-        url: String,
-        /// Fiscal year of the filing (e.g. 2025 for Apple's FY2025 10-K).
-        #[arg(long)]
-        fiscal_year: u16,
-        /// Override the fixtures directory.
-        #[arg(long, default_value = FIXTURES_DIR)]
-        fixtures: PathBuf,
+        #[command(subcommand)]
+        source: IngestSource,
     },
     /// Run the engine for `cik`: register both suggestors, converge, print
     /// promoted facts as JSON.
@@ -105,6 +91,41 @@ enum Command {
     },
 }
 
+#[derive(Subcommand)]
+enum IngestSource {
+    /// Live SEC EDGAR fetch — heading-level granularity.
+    Sec {
+        /// SEC CIK (e.g. 0000320193).
+        #[arg(long)]
+        cik: String,
+        /// Direct URL to the primary 10-K HTML document on EDGAR.
+        #[arg(long)]
+        url: String,
+        /// Fiscal year of the filing (e.g. 2025).
+        #[arg(long)]
+        fiscal_year: u16,
+        /// Override the fixtures directory.
+        #[arg(long, default_value = FIXTURES_DIR)]
+        fixtures: PathBuf,
+    },
+    /// HuggingFace JSONL shard ingest — sentence-level granularity.
+    /// Materialises every 10-K filing in the shard as a separate
+    /// `*-risk-factors-hf.json` fixture (the `-hf` suffix marks the
+    /// granularity so it doesn't get mixed with SEC heading fixtures).
+    Hf {
+        /// Dataset repo (e.g. `JanosAudran/financial-reports-sec`).
+        #[arg(long)]
+        dataset: String,
+        /// Path to a single JSONL shard within the dataset
+        /// (e.g. `data/small/test/shard_0.jsonl`).
+        #[arg(long)]
+        shard: String,
+        /// Override the fixtures directory.
+        #[arg(long, default_value = FIXTURES_DIR)]
+        fixtures: PathBuf,
+    },
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -112,33 +133,35 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     match Cli::parse().command {
-        Command::Ingest {
-            source,
-            cik,
-            url,
-            fiscal_year,
-            fixtures,
-        } => ingest(&source, Cik::new(cik), &url, fiscal_year, &fixtures).await,
+        Command::Ingest { source } => ingest(source).await,
         Command::Analyse { cik, fixtures } => analyse(Cik::new(cik), &fixtures).await,
         Command::Portfolio { budget, fixtures } => portfolio(budget, &fixtures).await,
     }
 }
 
-async fn ingest(
-    source: &str,
-    cik: Cik,
-    url: &str,
-    fiscal_year: u16,
-    fixtures_dir: &std::path::Path,
-) -> anyhow::Result<()> {
+async fn ingest(source: IngestSource) -> anyhow::Result<()> {
     match source {
         #[cfg(feature = "sec-ingest")]
-        "sec" => ingest_sec(&cik, url, fiscal_year, fixtures_dir).await,
+        IngestSource::Sec {
+            cik,
+            url,
+            fiscal_year,
+            fixtures,
+        } => ingest_sec(&Cik::new(cik), &url, fiscal_year, &fixtures).await,
         #[cfg(not(feature = "sec-ingest"))]
-        "sec" => anyhow::bail!(
+        IngestSource::Sec { .. } => anyhow::bail!(
             "SEC ingest is gated behind the `sec-ingest` cargo feature; rebuild with `--features=sec-ingest`"
         ),
-        other => anyhow::bail!("unknown ingest source {other:?}; supported: sec"),
+        #[cfg(feature = "hf-ingest")]
+        IngestSource::Hf {
+            dataset,
+            shard,
+            fixtures,
+        } => ingest_hf(&dataset, &shard, &fixtures).await,
+        #[cfg(not(feature = "hf-ingest"))]
+        IngestSource::Hf { .. } => anyhow::bail!(
+            "HF ingest is gated behind the `hf-ingest` cargo feature; rebuild with `--features=hf-ingest`"
+        ),
     }
 }
 
@@ -166,6 +189,28 @@ async fn ingest_sec(
         section.count(),
         out_path.display()
     );
+    Ok(())
+}
+
+#[cfg(feature = "hf-ingest")]
+async fn ingest_hf(
+    dataset: &str,
+    shard: &str,
+    fixtures_dir: &std::path::Path,
+) -> anyhow::Result<()> {
+    tracing::info!(%dataset, %shard, "downloading HF JSONL shard");
+    let written =
+        fathom_sparc_ingest::fetch_and_extract_hf_shard(dataset, shard, fixtures_dir)
+            .await
+            .map_err(|e| anyhow::anyhow!("HF ingest failed: {e}"))?;
+    println!(
+        "wrote {} HF-derived fixtures (sentence-level granularity) to {}",
+        written.len(),
+        fixtures_dir.display()
+    );
+    if let Some(first) = written.first() {
+        println!("first: {}", first.display());
+    }
     Ok(())
 }
 

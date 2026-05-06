@@ -15,16 +15,15 @@ sec = [
     "manifold/extract",
     "dep:tokio",
 ]
-# HuggingFace dataset ingest via manifold's HuggingFaceObjectStore +
-# the parquet crate. Pulls native object_store + parquet readers.
+# HuggingFace dataset ingest via manifold's HuggingFaceObjectStore.
+# JSONL-shaped datasets (e.g. JanosAudran/financial-reports-sec) only
+# need the object store + serde_json; parquet-shaped datasets would add
+# `parquet` + `arrow` here in a follow-up.
 hf = [
     "dep:manifold",
     "manifold/object-huggingface",
-    "dep:parquet",
-    "dep:arrow",
     "dep:object_store",
     "dep:tokio",
-    "dep:bytes",
     "dep:futures",
 ]
 
@@ -39,8 +38,5 @@ tracing.workspace = true
 manifold = { workspace = true, optional = true }
 
 tokio = { workspace = true, optional = true }
-parquet = { workspace = true, optional = true }
-arrow = { workspace = true, optional = true }
 object_store = { workspace = true, optional = true }
-bytes = { version = "1", optional = true }
 futures = { version = "0.3", optional = true }

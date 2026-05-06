@@ -15,6 +15,8 @@
 //! Keeping the same output shape across all three means downstream
 //! suggestors don't need to change when the source flips.
 
+#[cfg(feature = "hf")]
+pub mod hf;
 #[cfg(feature = "sec")]
 pub mod sec;
 
@@ -23,6 +25,8 @@ use std::path::Path;
 
 use fathom_sparc_core::RiskFactorSection;
 
+#[cfg(feature = "hf")]
+pub use hf::{HfIngestError, fetch_shard_to_fixtures as fetch_and_extract_hf_shard};
 #[cfg(feature = "sec")]
 pub use sec::{SecIngestError, fetch_and_extract as fetch_and_extract_sec};
 
