@@ -1,20 +1,20 @@
 [package]
-name = "fathom-cli"
+name = "fathom-sparc-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
-description = "Fathom CLI — assemble formations and run convergence over filings."
+description = "Fathom — SPARC CLI: assemble formations and run convergence over filings."
 
 [[bin]]
-name = "fathom"
+name = "fathom-sparc"
 path = "src/main.rs"
 
 [dependencies]
-fathom-core.workspace = true
-fathom-ingest.workspace = true
-fathom-suggestors.workspace = true
+fathom-sparc-core.workspace = true
+fathom-sparc-ingest.workspace = true
+fathom-sparc-suggestors.workspace = true
 
 # Converge contracts — `kernel-authority` exposes the `new_fact` constructor
 # used to seed the in-memory Context the suggestor runs against.

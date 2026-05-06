@@ -12,7 +12,7 @@
 use std::fs;
 use std::path::Path;
 
-use fathom_core::RiskFactorSection;
+use fathom_sparc_core::RiskFactorSection;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IngestError {
@@ -50,7 +50,7 @@ pub fn load_risk_factor_fixture(path: impl AsRef<Path>) -> Result<RiskFactorSect
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fathom_core::FormType;
+    use fathom_sparc_core::FormType;
 
     fn fixture_path(name: &str) -> std::path::PathBuf {
         // CARGO_MANIFEST_DIR is crates/fathom-ingest; fixtures live at the

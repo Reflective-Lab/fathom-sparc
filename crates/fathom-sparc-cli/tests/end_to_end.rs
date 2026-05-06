@@ -8,7 +8,7 @@ use std::process::Command;
 
 #[test]
 fn analyse_apple_emits_drift_for_fy24_to_fy25() {
-    let output = Command::new(env!("CARGO_BIN_EXE_fathom"))
+    let output = Command::new(env!("CARGO_BIN_EXE_fathom-sparc"))
         .args(["analyse", "0000320193"])
         .output()
         .expect("spawn fathom binary");
@@ -41,7 +41,7 @@ fn analyse_apple_emits_drift_for_fy24_to_fy25() {
 
 #[test]
 fn analyse_unknown_cik_fails_with_clear_message() {
-    let output = Command::new(env!("CARGO_BIN_EXE_fathom"))
+    let output = Command::new(env!("CARGO_BIN_EXE_fathom-sparc"))
         .args(["analyse", "9999999999"])
         .output()
         .expect("spawn fathom binary");

@@ -17,7 +17,7 @@
 
 use async_trait::async_trait;
 use converge_pack::{AgentEffect, Context, ContextKey, ProposedFact, Suggestor};
-use fathom_core::{Cik, RiskFactorSection, analytic::RiskFactorDrift};
+use fathom_sparc_core::{Cik, RiskFactorSection, analytic::RiskFactorDrift};
 use std::collections::HashMap;
 
 const PROVENANCE: &str = "fathom:risk_factor_drift:v1";
@@ -135,7 +135,7 @@ pub fn compute_drifts(sections: &[RiskFactorSection]) -> Vec<RiskFactorDrift> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fathom_core::{Cik, FilingId, FormType};
+    use fathom_sparc_core::{Cik, FilingId, FormType};
 
     fn section(cik: &str, fy: u16, n: usize) -> RiskFactorSection {
         RiskFactorSection {

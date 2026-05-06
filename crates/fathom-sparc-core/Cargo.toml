@@ -1,11 +1,11 @@
 [package]
-name = "fathom-core"
+name = "fathom-sparc-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
-description = "Domain types for Fathom — companies, filings, sections, periods."
+description = "Domain types for Fathom — SPARC: companies, filings, sections, periods."
 
 [dependencies]
 serde.workspace = true

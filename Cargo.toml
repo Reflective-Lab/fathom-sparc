@@ -1,10 +1,10 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/fathom-core",
-    "crates/fathom-ingest",
-    "crates/fathom-suggestors",
-    "crates/fathom-cli",
+    "crates/fathom-sparc-core",
+    "crates/fathom-sparc-ingest",
+    "crates/fathom-sparc-suggestors",
+    "crates/fathom-sparc-cli",
 ]
 
 [workspace.package]
@@ -12,14 +12,14 @@ version = "1.0.0"
 edition = "2024"
 rust-version = "1.94.0"
 license = "MIT"
-repository = "https://github.com/Reflective-Lab/fathom"
+repository = "https://github.com/Reflective-Lab/fathom-sparc"
 publish = false
 
 [workspace.dependencies]
 # Internal
-fathom-core       = { path = "crates/fathom-core" }
-fathom-ingest     = { path = "crates/fathom-ingest" }
-fathom-suggestors = { path = "crates/fathom-suggestors" }
+fathom-sparc-core       = { path = "crates/fathom-sparc-core" }
+fathom-sparc-ingest     = { path = "crates/fathom-sparc-ingest" }
+fathom-sparc-suggestors = { path = "crates/fathom-sparc-suggestors" }
 
 # Converge platform — published on crates.io.
 # `converge-runtime` is intentionally not depended on: the name on crates.io

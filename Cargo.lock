@@ -172,15 +172,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "fathom-cli"
+name = "fathom-sparc-cli"
 version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
  "converge-pack",
- "fathom-core",
- "fathom-ingest",
- "fathom-suggestors",
+ "fathom-sparc-core",
+ "fathom-sparc-ingest",
+ "fathom-sparc-suggestors",
  "serde",
  "serde_json",
  "tokio",
@@ -189,7 +189,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fathom-core"
+name = "fathom-sparc-core"
 version = "1.0.0"
 dependencies = [
  "serde",
@@ -198,22 +198,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "fathom-ingest"
+name = "fathom-sparc-ingest"
 version = "1.0.0"
 dependencies = [
- "fathom-core",
+ "fathom-sparc-core",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
 ]
 
 [[package]]
-name = "fathom-suggestors"
+name = "fathom-sparc-suggestors"
 version = "1.0.0"
 dependencies = [
  "async-trait",
  "converge-pack",
- "fathom-core",
+ "fathom-sparc-core",
  "serde",
  "serde_json",
  "tracing",

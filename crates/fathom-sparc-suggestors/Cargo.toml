@@ -1,14 +1,14 @@
 [package]
-name = "fathom-suggestors"
+name = "fathom-sparc-suggestors"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
-description = "Converge suggestors that query Fathom's Iceberg lakehouse and propose facts."
+description = "Converge suggestors for Fathom — SPARC: query the lakehouse, propose facts."
 
 [dependencies]
-fathom-core.workspace = true
+fathom-sparc-core.workspace = true
 
 # Converge contracts
 converge-pack.workspace = true

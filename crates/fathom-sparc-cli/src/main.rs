@@ -14,9 +14,9 @@ use clap::{Parser, Subcommand};
 use converge_pack::fact::Fact;
 use converge_pack::fact::kernel_authority::new_fact;
 use converge_pack::{Context, ContextKey, Suggestor};
-use fathom_core::{Cik, RiskFactorSection};
-use fathom_ingest::load_risk_factor_fixture;
-use fathom_suggestors::RiskFactorDriftSuggestor;
+use fathom_sparc_core::{Cik, RiskFactorSection};
+use fathom_sparc_ingest::load_risk_factor_fixture;
+use fathom_sparc_suggestors::RiskFactorDriftSuggestor;
 
 const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures");
 
