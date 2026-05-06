@@ -245,55 +245,69 @@ deps (Converge 3.7.6, Organism 1.4.0, Prism via git, Sail-aligned
 arrow/datafusion/parquet/object_store) are wired; local infra (RustFS + Sail
 in `compose.yml`) is in place.
 
-**1.1.0 — first end-to-end slice (shipped).**
+**1.1.0 — first end-to-end slice (shipped).** `RiskFactorDriftSuggestor`,
+fixture-based ingest, CLI wiring against an in-memory `Context`. Real Apple
+10-K data: Item 1A risk factor headings extracted from `aapl-20240928.htm`
+and `aapl-20250927.htm` on SEC EDGAR, committed under `fixtures/`.
 
-```bash
-$ fathom analyse 0000320193
-[
-  {
-    "key": "Proposals",
-    "id": "risk_factor_drift::0000320193::2025",
-    "content": {
-      "current": { "cik": "0000320193", "form": "10-K", "fiscal_year": 2025 },
-      "prior":   { "cik": "0000320193", "form": "10-K", "fiscal_year": 2024 },
-      "current_count": 27,
-      "prior_count":   28,
-      "delta":         -1
-    },
-    "provenance": "fathom:risk_factor_drift:v1"
-  }
-]
+**1.2.0 — disagreement-as-signal (shipped).** Second suggestor —
+`RiskFactorLanguageSuggestor` — runs alongside the count drift and proves
+the architecture's central claim: **two perspectives that disagree are more
+informative than one perspective averaged.**
+
+```text
+$ fathom-sparc analyse 0000320193
+
+count drift     →  28 → 27   (delta -1, visually quiet)
+language drift  →  jaccard 0.618, +6 added / -7 removed (loud)
+
+  - Removed: "The Company's retail stores are subject to numerous risks…"
+  - Removed: "Expectations relating to environmental, social and
+              governance considerations…"
+  + Added:   "Varied stakeholder expectations about social and other
+              issues…"                       ← softer ESG framing
+  - Removed: "carriers, wholesalers, retailers and other resellers"
+  + Added:   "carriers and other resellers"  ← narrowed
 ```
 
-Real Apple 10-K data: Item 1A risk factor headings extracted from
-`aapl-20240928.htm` and `aapl-20250927.htm` on SEC EDGAR, committed under
-`fixtures/`. The drift signal isn't just the count (-1) — Apple removed the
-dedicated "retail stores" risk factor and rephrased the ESG-related risk
-factor in FY25; future suggestors will surface that textual drift alongside
-the count.
+If Fathom collapsed these to a single number — sentiment score, risk
+rating, anomaly probability — the qualitative shift would vanish. Keeping
+the perspectives separate, with provenance per fact, is the entire point.
 
-What's wired:
-- `fathom-ingest::load_risk_factor_fixture()` — JSON → `RiskFactorSection`.
-- `fathom-suggestors::RiskFactorDriftSuggestor` — Converge `Suggestor`,
-  reads `ContextKey::Signals`, proposes to `ContextKey::Proposals` with
-  provenance `fathom:risk_factor_drift:v1`.
-- `fathom-cli` — discovers fixtures by CIK, builds an in-memory `Context`
-  via `converge_pack::fact::kernel_authority::new_fact`, runs the
-  suggestor, prints proposals as JSON.
+What's wired in 1.2.0:
+
+| Crate | Owns |
+|---|---|
+| `fathom-sparc-core::analytic` | `RiskFactorDrift` (count) + `RiskFactorLanguageDrift` (Jaccard, identical_count, added/removed lists) |
+| `fathom-sparc-ingest::load_risk_factor_fixture` | JSON → `RiskFactorSection` |
+| `fathom-sparc-suggestors::RiskFactorDriftSuggestor` | provenance `fathom:risk_factor_drift:v1` |
+| `fathom-sparc-suggestors::RiskFactorLanguageSuggestor` | provenance `fathom-sparc:risk_factor_language:v1` |
+| `fathom-sparc-cli` | discovers fixtures by CIK, runs both suggestors sequentially against a hand-rolled `Context`, prints proposals as JSON |
+
+Tests: 11 unit (5 drift + 6 language) + 2 ingest + 2 binary integration =
+**15 passing**.
+
+**Deliberate deferral in 1.2.0.** The CLI runs each `Suggestor::execute()`
+directly rather than through `Engine::run()`. This was the right call when
+there was only one suggestor (no scheduling decisions to make), but with two
+it now hides what the engine actually contributes — eligibility checks,
+deterministic merge order, the promotion gate that turns `ProposedFact` into
+authoritative `Fact` with full provenance. Wiring the real engine is the
+1.3.0 slice.
 
 **Next slices.**
 
-1. **A second suggestor** — `RiskFactorLanguageSuggestor` over the same
-   sections (cosine drift on heading embeddings, or a simple Jaccard on
-   token sets). Two suggestors composing is the moment to introduce a real
-   Converge `Engine::run()` integration test.
-2. **Real ingest from SEC EDGAR** — replace the fixture path with a
-   parser that reads `aapl-{date}.htm` directly, writes `RiskFactorSection`
-   rows to Iceberg via DataFusion. Same downstream shape; suggestors don't
-   change.
-3. **HuggingFace pipeline** — fan out across the full
+1. **`Engine::run()` integration (1.3.0).** Replace the hand-rolled
+   `MockContext` with a real `ContextState`, register both suggestors with
+   the engine, run the convergence loop, inspect promoted `Fact`s. This is
+   what makes the architecture diagram in this README actually true.
+2. **Real ingest from SEC EDGAR (1.4.0).** Replace fixtures with a Rust
+   port of the python heading extractor (italic+bold span detection),
+   writing `RiskFactorSection` rows to Iceberg via DataFusion. Same
+   downstream shape; suggestors unchanged.
+3. **HuggingFace pipeline (1.5.0).** Fan out across the full
    `JanosAudran/financial-reports-sec` corpus into the same Iceberg
    tables, partition by `(cik, fiscal_year, form_type)`.
-4. **Organism formation** — assemble both suggestors into
-   `DisclosureRiskFormation`. Run across an SBOM-equivalent (a portfolio of
-   CIKs) for a screen-style output.
+4. **Organism formation (2.0.0).** Assemble both suggestors into
+   `DisclosureRiskFormation`. Run across a portfolio of CIKs for a
+   screen-style output. This is the moment Organism earns its keep.
