@@ -60,9 +60,27 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Materialise a HuggingFace dataset slice into the local Iceberg lakehouse.
-    /// Not yet implemented; fixtures under `fixtures/` are the on-ramp.
-    Ingest,
+    /// Live SEC EDGAR ingest — fetch a 10-K HTML, extract Item 1A risk
+    /// factors, write a `RiskFactorSection` JSON fixture under `fixtures/`.
+    /// Requires the `sec-ingest` feature.
+    Ingest {
+        /// Source: `sec` (live SEC EDGAR fetch). Future: `hf`.
+        #[arg(long, default_value = "sec")]
+        source: String,
+        /// SEC CIK (e.g. 0000320193).
+        #[arg(long)]
+        cik: String,
+        /// Direct URL to the primary 10-K HTML document on EDGAR (e.g.
+        /// `https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm`).
+        #[arg(long)]
+        url: String,
+        /// Fiscal year of the filing (e.g. 2025 for Apple's FY2025 10-K).
+        #[arg(long)]
+        fiscal_year: u16,
+        /// Override the fixtures directory.
+        #[arg(long, default_value = FIXTURES_DIR)]
+        fixtures: PathBuf,
+    },
     /// Run the engine for `cik`: register both suggestors, converge, print
     /// promoted facts as JSON.
     Analyse {
@@ -94,13 +112,61 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     match Cli::parse().command {
-        Command::Ingest => {
-            tracing::info!("ingest pipeline not yet implemented; use fixtures under fixtures/");
-            Ok(())
-        }
+        Command::Ingest {
+            source,
+            cik,
+            url,
+            fiscal_year,
+            fixtures,
+        } => ingest(&source, Cik::new(cik), &url, fiscal_year, &fixtures).await,
         Command::Analyse { cik, fixtures } => analyse(Cik::new(cik), &fixtures).await,
         Command::Portfolio { budget, fixtures } => portfolio(budget, &fixtures).await,
     }
+}
+
+async fn ingest(
+    source: &str,
+    cik: Cik,
+    url: &str,
+    fiscal_year: u16,
+    fixtures_dir: &std::path::Path,
+) -> anyhow::Result<()> {
+    match source {
+        #[cfg(feature = "sec-ingest")]
+        "sec" => ingest_sec(&cik, url, fiscal_year, fixtures_dir).await,
+        #[cfg(not(feature = "sec-ingest"))]
+        "sec" => anyhow::bail!(
+            "SEC ingest is gated behind the `sec-ingest` cargo feature; rebuild with `--features=sec-ingest`"
+        ),
+        other => anyhow::bail!("unknown ingest source {other:?}; supported: sec"),
+    }
+}
+
+#[cfg(feature = "sec-ingest")]
+async fn ingest_sec(
+    cik: &Cik,
+    url: &str,
+    fiscal_year: u16,
+    fixtures_dir: &std::path::Path,
+) -> anyhow::Result<()> {
+    tracing::info!(cik = cik.as_str(), %url, fiscal_year, "fetching SEC EDGAR filing");
+    let section = fathom_sparc_ingest::fetch_and_extract_sec(url, cik, fiscal_year)
+        .await
+        .map_err(|e| anyhow::anyhow!("SEC ingest failed: {e}"))?;
+    let out_path = fixtures_dir.join(format!(
+        "cik-{}-fy{}-risk-factors.json",
+        cik.as_str(),
+        fiscal_year,
+    ));
+    std::fs::create_dir_all(fixtures_dir)?;
+    let json = serde_json::to_string_pretty(&section)?;
+    std::fs::write(&out_path, json)?;
+    println!(
+        "extracted {} risk factors → {}",
+        section.count(),
+        out_path.display()
+    );
+    Ok(())
 }
 
 async fn analyse(cik: Cik, fixtures_dir: &std::path::Path) -> anyhow::Result<()> {

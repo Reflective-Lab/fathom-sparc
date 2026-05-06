@@ -17,6 +17,10 @@ path = "src/main.rs"
 # FERROX_HIGHS_ROOT (set by .cargo/config.toml under the standard local
 # checkout layout). Build with: `cargo build --features=ferrox-mip`.
 ferrox-mip = ["dep:ferrox"]
+# Live SEC EDGAR ingest (`fathom-sparc ingest --source=sec`). Pulls
+# manifold's HttpFetchProvider + ScraperHtmlBackend through
+# fathom-sparc-ingest.
+sec-ingest = ["fathom-sparc-ingest/sec"]
 
 [dependencies]
 fathom-sparc-core.workspace = true

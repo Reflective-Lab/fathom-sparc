@@ -5,7 +5,28 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
-description = "Ingestion pipeline for Fathom — SPARC: fixture loading at 1.0; HuggingFace → DataFusion → Iceberg materialisation lands in 1.x."
+description = "Ingestion pipeline for Fathom — SPARC: fixture loader + SEC EDGAR scraper + HuggingFace dataset reader."
+
+[features]
+# Live SEC EDGAR ingest via manifold's HttpFetchProvider + ScraperHtmlBackend.
+sec = [
+    "dep:manifold",
+    "manifold/fetch",
+    "manifold/extract",
+    "dep:tokio",
+]
+# HuggingFace dataset ingest via manifold's HuggingFaceObjectStore +
+# the parquet crate. Pulls native object_store + parquet readers.
+hf = [
+    "dep:manifold",
+    "manifold/object-huggingface",
+    "dep:parquet",
+    "dep:arrow",
+    "dep:object_store",
+    "dep:tokio",
+    "dep:bytes",
+    "dep:futures",
+]
 
 [dependencies]
 fathom-sparc-core.workspace = true
@@ -13,10 +34,13 @@ fathom-sparc-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
-# NOTE: lakehouse deps (datafusion, arrow, parquet, object_store, iceberg,
-# hf-hub) are declared in `workspace.dependencies` as the architectural
-# catalogue. They get pulled into this crate's build graph when the
-# materialisation pipeline lands — not before, to keep build times sane and
-# avoid the iceberg-datafusion 0.6 ↔ datafusion 53 mismatch on a path that
-# doesn't yet need them.
+manifold = { workspace = true, optional = true }
+
+tokio = { workspace = true, optional = true }
+parquet = { workspace = true, optional = true }
+arrow = { workspace = true, optional = true }
+object_store = { workspace = true, optional = true }
+bytes = { version = "1", optional = true }
+futures = { version = "0.3", optional = true }

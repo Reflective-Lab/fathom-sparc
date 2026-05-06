@@ -53,8 +53,12 @@ converge-optimization = "3.8.1"
 # Currently git-dep'd against the Reflective-Lab github main branch because
 # the converge-* prefixed names are not yet on crates.io. When they publish,
 # each entry collapses to e.g. `prism = "1.0"`.
-prism   = { package = "converge-prism-analytics",  git = "https://github.com/Reflective-Lab/prism",          branch = "main" }
-arbiter = { package = "converge-arbiter-policy",   git = "https://github.com/Reflective-Lab/arbiter-policy", branch = "main" }
+prism    = { package = "converge-prism-analytics",  git = "https://github.com/Reflective-Lab/prism",            branch = "main" }
+arbiter  = { package = "converge-arbiter-policy",   git = "https://github.com/Reflective-Lab/arbiter-policy",   branch = "main" }
+# Manifold is git-dep'd against `next` because the HF object store and the
+# HTML extract backend both land there first; will switch to `branch="main"`
+# (or a crates.io version) when next merges to main.
+manifold = { package = "converge-manifold-adapters", git = "https://github.com/Reflective-Lab/manifold-adapters", branch = "next" }
 
 # Constraint solvers (CP-SAT, MIP) as Converge suggestors. Ferrox earns its
 # keep at portfolio scope (1.7.0+) through provable optimality; not yet pulled

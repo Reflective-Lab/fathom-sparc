@@ -1,18 +1,30 @@
-//! Ingestion pipeline for Fathom.
+//! Ingestion pipeline for Fathom — SPARC.
 //!
-//! At 1.0 this crate provides a minimal **fixture loader**: it deserialises
-//! pre-extracted [`RiskFactorSection`] JSON files into the domain type. The
-//! production path — HuggingFace download → DataFusion parse → Iceberg
-//! materialisation — lands in 1.x as later slices.
+//! Three on-ramps to a [`RiskFactorSection`], all produce the same shape:
 //!
-//! Keeping the same input shape (`RiskFactorSection`) across fixture and
-//! materialised paths means downstream suggestors don't need to change when
-//! the source flips.
+//! 1. **Fixture loader** (always available) — reads pre-extracted JSON files
+//!    from `fixtures/`. Handy for tests and reproducible demos.
+//! 2. **SEC EDGAR live ingest** (`feature = "sec"`) — fetches a 10-K HTML
+//!    document via `manifold::HttpFetchProvider`, locates Item 1A, and
+//!    extracts risk-factor headings via `manifold::ScraperHtmlBackend`.
+//! 3. **HuggingFace dataset ingest** (`feature = "hf"`, future) — reads a
+//!    parquet slice from a HF dataset via
+//!    `manifold::object_storage::HuggingFaceObjectStore` + the `parquet`
+//!    crate.
+//!
+//! Keeping the same output shape across all three means downstream
+//! suggestors don't need to change when the source flips.
+
+#[cfg(feature = "sec")]
+pub mod sec;
 
 use std::fs;
 use std::path::Path;
 
 use fathom_sparc_core::RiskFactorSection;
+
+#[cfg(feature = "sec")]
+pub use sec::{SecIngestError, fetch_and_extract as fetch_and_extract_sec};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IngestError {
