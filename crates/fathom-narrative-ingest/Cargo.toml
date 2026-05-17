@@ -5,20 +5,21 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
-description = "Ingestion pipeline for Fathom — SPARC: fixture loader + SEC EDGAR scraper + HuggingFace dataset reader."
+description = "Synthesis layer for Fathom — Narrative: turns embassy-sec-edgar Filings + HuggingFace JSONL into RiskFactorSection."
 
 [features]
-# Live SEC EDGAR ingest via manifold's HttpFetchProvider + ScraperHtmlBackend.
+# Live SEC EDGAR ingest — delegates the contract (User-Agent, rate-limit
+# politeness, Item-N section locator, multi-selector heading extractor) to
+# `embassy-sec-edgar`'s `live` feature. The fathom-side code is now thin:
+# call embassy's helpers, then synthesize a SPARC `RiskFactorSection`.
 sec = [
-    "dep:manifold",
-    "manifold/fetch",
-    "manifold/extract",
+    "dep:embassy-sec-edgar",
     "dep:tokio",
 ]
-# HuggingFace dataset ingest via manifold's HuggingFaceObjectStore.
-# JSONL-shaped datasets (e.g. JanosAudran/financial-reports-sec) only
-# need the object store + serde_json; parquet-shaped datasets would add
-# `parquet` + `arrow` here in a follow-up.
+# HuggingFace dataset ingest via manifold's HuggingFaceObjectStore. JSONL-
+# shaped datasets (e.g. JanosAudran/financial-reports-sec) only need the
+# object store + serde_json; parquet-shaped datasets would add `parquet` +
+# `arrow` here in a follow-up.
 hf = [
     "dep:manifold",
     "manifold/object-huggingface",
@@ -35,6 +36,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
+embassy-sec-edgar = { workspace = true, optional = true }
 manifold = { workspace = true, optional = true }
 
 tokio = { workspace = true, optional = true }

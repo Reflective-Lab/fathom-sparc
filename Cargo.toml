@@ -25,20 +25,20 @@ fathom-narrative-suggestors = { path = "crates/fathom-narrative-suggestors" }
 # alongside the Reflective-Lab platform extraction (see migration notes:
 # converge-knowledge → mnemos, -analytics → prism, -policy → arbiter,
 # -domain → atelier, -provider-adapters → manifold).
-converge-kernel   = "3.8.1"
-converge-model    = "3.8.1"
-converge-pack     = "3.8.1"
-converge-storage  = "3.8.1"
+converge-kernel   = "3.9.1"
+converge-model    = "3.9.1"
+converge-pack     = "3.9.1"
+converge-storage  = "3.9.1"
 # converge-core is re-exported partially through converge-kernel; the Violation
 # type used by custom invariants is not in the re-export list, so we depend
 # on core directly when authoring invariants.
-converge-core     = "3.8.1"
+converge-core     = "3.9.1"
 # converge-optimization ships the foundation's pure-Rust solvers — 0-1 Knapsack
 # DP, Dijkstra — and the PortfolioSuggestor that wraps Knapsack as a Converge
 # Suggestor. Used in the portfolio coverage slice (1.7.0) as the always-on
 # solver path; Ferrox HighsMipSuggestor is the optional native-build
 # alternative (engine merges by confidence when both are registered).
-converge-optimization = "3.8.1"
+converge-optimization = "3.9.1"
 
 # Reflective-Lab Converge extensions.
 #
@@ -60,6 +60,11 @@ arbiter  = { package = "converge-arbiter-policy",   git = "https://github.com/Re
 # converge-manifold-adapters publishes; for now the git-dep against main
 # is the single source of truth.
 manifold = { package = "converge-manifold-adapters", git = "https://github.com/Reflective-Lab/manifold-adapters", branch = "main" }
+# embassy-sec-edgar — owns the SEC EDGAR contract (User-Agent, rate-limit
+# politeness, Item-N section locator, multi-selector heading extractor).
+# Same git-dep pattern as manifold because embassy-ports isn't on crates.io
+# yet. The `live` feature pulls the HTTP transport.
+embassy-sec-edgar = { package = "converge-embassy-sec-edgar", git = "https://github.com/Reflective-Lab/embassy-ports", branch = "main", features = ["live"] }
 
 # Constraint solvers (CP-SAT, MIP) as Converge suggestors. Ferrox earns its
 # keep at portfolio scope (1.7.0+) through provable optimality; not yet pulled
